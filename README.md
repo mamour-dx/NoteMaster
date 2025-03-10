@@ -28,14 +28,15 @@ NoteMaster est une application web qui combine la prise de notes et l'apprentiss
   - Comparaison entre différentes notes
 - **Historique complet** : Accès à toutes vos tentatives précédentes
 
-### ⚙️ Configuration Facile
+### 🔒 Stockage Local des Données
 
-- **Interface API** : Gérez votre clé API DeepSeek directement depuis l'application
-- **Documentation intégrée** : Guide complet d'utilisation accessible dans l'app
+- **Confidentialité** : Vos notes et données sont stockées uniquement dans votre navigateur
+- **Import/Export** : Sauvegardez et restaurez vos données facilement
+- **Multi-utilisateurs** : Chaque utilisateur a ses propres données, même sur une instance partagée
 
 ---
 
-## 🚀 Installation 
+## 🚀 Installation
 
 PS: Il est considéré comme bonne pratique de mettre un environnement virtuel. C'est très simple, demandes à ChatGPT comment faire :)
 
@@ -52,13 +53,7 @@ cd NoteMaster
 pip install -r requirements.txt
 ```
 
-3. **Configurez l'API :**
-
-- Créez un compte sur [OpenRouter](https://openrouter.ai)
-- Obtenez une clé API pour DeepSeek (détaillé sur ce [blog](https://apidog.com/blog/how-to-use-deepseek-api-for-free/))
-- Configurez la clé dans l'application via l'interface ou le fichier `.env`
-
-4. **Lancez l'application :**
+3. **Lancez l'application :**
 
 ```bash
 streamlit run app.py
@@ -74,12 +69,13 @@ NoteMaster/
 ├── config.py             # Configuration (chemins, constantes)
 ├── requirements.txt      # Dépendances Python
 ├── utils/
-│   ├── note_manager.py   # Gestion des notes
+│   ├── note_manager.py   # Gestion des notes (fichiers)
 │   ├── question_generator.py  # Génération des questions
-│   └── stats_manager.py  # Gestion des statistiques
-├── notes/               # Stockage des notes
-├── questions/          # Stockage des questions générées
-└── stats/             # Stockage des statistiques
+│   ├── stats_manager.py  # Gestion des statistiques (fichiers)
+│   └── session_storage.py  # Stockage des données en session
+├── notes/               # Stockage des notes (serveur)
+├── questions/          # Stockage des questions générées (serveur)
+└── stats/             # Stockage des statistiques (serveur)
 ```
 
 ---
@@ -110,9 +106,56 @@ NoteMaster/
    - Analysez votre progression
    - Gérez votre historique
 
-5. **Configuration API**
-   - Configurez votre clé API
-   - Vérifiez le statut de la connexion
+5. **Import/Export**
+
+   - Sauvegardez vos données localement
+   - Restaurez vos données depuis un fichier JSON
+   - Gardez vos notes et statistiques privées
+
+---
+
+## 🔧 Configuration de l'API (Optionnel)
+
+Si vous souhaitez utiliser vos propres clés API pour la génération de questions, suivez ces étapes :
+
+### 1️⃣ Obtenir une clé API OpenRouter
+
+- Rendez-vous sur [OpenRouter](https://openrouter.ai) et créez un compte.
+- Générez une clé API gratuite pour le modèle DeepSeek V3.
+
+### 2️⃣ Ajouter votre clé API à l'application
+
+**Via un fichier `.env` (manuel)**
+
+- Créez un fichier `.env` à la racine du projet.
+- Ajoutez-y la ligne suivante en remplaçant `VOTRE_CLE_API` par votre clé API :
+  ```
+  DEEPSEEK_KEY=VOTRE_CLE_API
+  ```
+- Redémarrez l'application pour que les modifications soient prises en compte.
+
+---
+
+## ❓ Résolution des problèmes
+
+### Problèmes d'API
+
+Si vous rencontrez des problèmes avec l'API :
+
+- Vérifiez que votre clé API est correcte et valide.
+- Assurez-vous que vous avez bien installé les dépendances nécessaires (`pip install openai python-dotenv`).
+- Consultez la documentation d'OpenRouter ici : [Documentation OpenRouter](https://openrouter.ai/docs).
+
+### Problèmes de démarrage
+
+- Assurez-vous que toutes les dépendances sont installées : `pip install -r requirements.txt`
+- Vérifiez que vous utilisez Python 3.8 ou supérieur
+- Pour de meilleures performances, installez Watchdog : `pip install watchdog`
+
+### Problèmes de stockage
+
+- Si vos données ne sont pas sauvegardées entre les sessions, utilisez la fonction Import/Export pour sauvegarder manuellement vos données
+- Assurez-vous que votre navigateur n'est pas en mode navigation privée
 
 ---
 
@@ -123,6 +166,9 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 - Signaler des bugs
 - Proposer des améliorations
 - Soumettre des pull requests
+
+Si vous avez un problème ou souhaitez suggérer une amélioration, ouvrez un **issue** sur GitHub :
+👉 [Ouvrir un issue](https://github.com/mamour-dx/NoteMaster/issues)
 
 ---
 

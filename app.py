@@ -11,6 +11,16 @@ from utils.note_manager import load_notes, save_note, delete_note, update_note
 from utils.question_generator import generate_questions, evaluate_answer
 from config import QUESTIONS_DIR
 from utils.stats_manager import get_all_stats, save_quiz_result, delete_note_stats, delete_all_stats
+# Import session storage functions
+from utils.session_storage import (
+    init_session_storage, load_session_notes, save_session_note, delete_session_note, update_session_note,
+    save_session_questions, get_session_questions, save_session_quiz_result, get_session_note_stats,
+    get_all_session_stats, delete_session_note_stats, delete_all_session_stats,
+    save_to_local_storage, load_from_local_storage
+)
+
+# Initialize session storage
+init_session_storage()
 
 # Application principale
 
@@ -19,7 +29,7 @@ st.sidebar.title("📝 **NoteMaster**")
 st.sidebar.markdown("<h3>Menu</h3>", unsafe_allow_html=True)
 menu = st.sidebar.radio(
     "📂 <span style='color: #0066CC;'>Choisissez une option :</span>", 
-    ["Dashboard", "Prise de Notes", "Mode Quiz", "Performances", "API", "Docs"], 
+    ["Dashboard", "Prise de Notes", "Mode Quiz", "Performances", "Import/Export"], 
     format_func=lambda x: f"🔹 {x}", 
     index=0,
     label_visibility="hidden", 
@@ -50,364 +60,341 @@ if menu == "Dashboard":
 
 
 elif menu == "Prise de Notes":
-    st.header("Prise de Notes")
-    
-    if "notes" not in st.session_state:
-        st.session_state.notes = load_notes()
-    
-    if "editing_note" not in st.session_state:
-        st.session_state.editing_note = None
+    st.title("📝 Prise de Notes")
+    st.markdown("---")
 
-    # Affichage des notes existantes
-    st.write("### Vos notes :")
-    if st.session_state.notes:
-        for note in st.session_state.notes:
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.write(f"📝 {note['title']}")
-            with col2:
-                if st.button("Voir/Modifier", key=f"edit_{note['title']}"):
-                    st.session_state.editing_note = note
-            with col3:
-                if st.button("Supprimer", key=f"delete_{note['title']}"):
-                    delete_note(note['title'])
-                    st.session_state.notes = load_notes()
-                    if st.session_state.editing_note and st.session_state.editing_note['title'] == note['title']:
-                        st.session_state.editing_note = None
-                    st.rerun()
-    else:
-        st.info("Aucune note disponible pour le moment.")
-
-    # Section d'édition/visualisation
-    if st.session_state.editing_note:
-        st.markdown("---")
-        st.subheader(f"Modifier la note : {st.session_state.editing_note['title']}")
-        edited_content = st.text_area(
-            "Contenu de la note",
-            value=st.session_state.editing_note['content'],
-            height=300,
-            key="edit_content"
-        )
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Sauvegarder les modifications"):
-                if update_note(st.session_state.editing_note['title'], edited_content):
-                    st.success("Note mise à jour avec succès!")
-                    st.session_state.notes = load_notes()
+    # Afficher les notes existantes
+    notes = load_session_notes()
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.subheader("Notes existantes")
+        if not notes:
+            st.info("Aucune note pour le moment. Créez votre première note !")
+        else:
+            selected_note = st.selectbox(
+                "Sélectionnez une note à afficher",
+                options=[note["title"] for note in notes],
+                index=0 if notes else None,
+                key="note_select"
+            )
+            
+            if selected_note:
+                selected_content = next((note["content"] for note in notes if note["title"] == selected_note), "")
+                
+                # Boutons d'action
+                col1a, col1b = st.columns(2)
+                with col1a:
+                    if st.button("🗑️ Supprimer", key="delete_note_btn"):
+                        delete_session_note(selected_note)
+                        st.success(f"Note '{selected_note}' supprimée !")
+                        st.rerun()
+                
+                with col1b:
+                    if st.button("📋 Modifier", key="edit_note_btn"):
+                        st.session_state.editing_note = selected_note
+                        st.session_state.editing_content = selected_content
+                        st.rerun()
+    
+    with col2:
+        st.subheader("Créer/Modifier une note")
+        
+        # Mode édition
+        if st.session_state.get("editing_note"):
+            note_title = st.text_input("Titre de la note", value=st.session_state.editing_note, key="edit_title_input")
+            note_content = st.text_area("Contenu de la note", value=st.session_state.editing_content, height=300, key="edit_content_input")
+            
+            col2a, col2b = st.columns(2)
+            with col2a:
+                if st.button("💾 Enregistrer les modifications", key="save_edit_btn"):
+                    if note_title != st.session_state.editing_note:
+                        # Le titre a changé, supprimer l'ancienne note et créer une nouvelle
+                        delete_session_note(st.session_state.editing_note)
+                        save_session_note(note_title, note_content)
+                        st.success(f"Note renommée et mise à jour : '{note_title}'")
+                    else:
+                        # Mettre à jour la note existante
+                        update_session_note(note_title, note_content)
+                        st.success(f"Note mise à jour : '{note_title}'")
+                    
+                    # Réinitialiser le mode édition
                     st.session_state.editing_note = None
+                    st.session_state.editing_content = None
+                    st.rerun()
+            
+            with col2b:
+                if st.button("❌ Annuler", key="cancel_edit_btn"):
+                    st.session_state.editing_note = None
+                    st.session_state.editing_content = None
+                    st.rerun()
+        
+        # Mode création
+        else:
+            note_title = st.text_input("Titre de la note", key="new_title_input")
+            note_content = st.text_area("Contenu de la note", height=300, key="new_content_input")
+            
+            if st.button("➕ Créer la note", key="create_note_btn"):
+                if note_title and note_content:
+                    save_session_note(note_title, note_content)
+                    st.success(f"Note créée : '{note_title}'")
+                    # Réinitialiser les champs
+                    st.session_state.new_title_input = ""
+                    st.session_state.new_content_input = ""
                     st.rerun()
                 else:
-                    st.error("Erreur lors de la mise à jour de la note")
-        with col2:
-            if st.button("Annuler"):
-                st.session_state.editing_note = None
-                st.rerun()
-
-    # Section pour créer une nouvelle note
-    st.markdown("---")
-    st.subheader("Créer une nouvelle note")
-    note_title = st.text_input("Titre de la note")
-    note_content = st.text_area("Contenu de la note", height=200)
-    if st.button("Sauvegarder"):
-        if note_title and note_content:
-            save_note(note_title, note_content)
-            st.session_state.notes = load_notes()
-            st.success(f"Note '{note_title}' sauvegardée avec succès !")
-            st.rerun()
-        else:
-            st.warning("Veuillez fournir un titre et un contenu pour votre note.")
+                    st.error("Veuillez remplir le titre et le contenu de la note.")
 
 
 
 elif menu == "Mode Quiz":
-    st.header("Mode Quiz")
+    st.title("❓ Mode Quiz")
+    st.markdown("---")
     
     # Charger les notes disponibles
-    notes = load_notes()
-    note_titles = [note["title"] for note in notes]
-    selected_note = st.selectbox("Choisissez une note", note_titles)
-
-    if selected_note:
-        note_content = next(note["content"] for note in notes if note["title"] == selected_note)
-        json_file_path = os.path.join(QUESTIONS_DIR, f"{selected_note}.json")
+    notes = load_session_notes()
+    
+    if not notes:
+        st.warning("Vous n'avez pas encore de notes. Veuillez d'abord créer des notes.")
+    else:
+        # Sélection de la note
+        selected_note = st.selectbox(
+            "Sélectionnez une note pour générer des questions",
+            options=[note["title"] for note in notes],
+            key="quiz_note_select"
+        )
         
-        # Initialisation des questions
-        if "questions" not in st.session_state or st.session_state.get("current_note") != selected_note:
-            if os.path.exists(json_file_path):
-                with open(json_file_path, "r") as file:
-                    st.session_state.questions = json.load(file)
-            else:
-                st.session_state.questions = []
-            st.session_state.current_note = selected_note
-            # Initialiser un dictionnaire pour stocker les réponses
-            st.session_state.user_answers = {}
-
-        # Générer de nouvelles questions
-        if st.button("Générer des questions"):
-            try:
-                with st.spinner("Génération des questions en cours..."):
-                    new_questions = generate_questions(selected_note, note_content)
-                
-                if new_questions:
-                    with open(json_file_path, "w") as file:
-                        json.dump(new_questions, file, indent=4, ensure_ascii=False)
-                    
-                    st.session_state.questions = new_questions
-                    st.session_state.user_answers = {}  # Réinitialiser les réponses
-                    st.success("Questions générées et sauvegardées avec succès !")
+        # Récupérer le contenu de la note sélectionnée
+        selected_content = next((note["content"] for note in notes if note["title"] == selected_note), "")
+        
+        # Afficher un aperçu du contenu
+        with st.expander("Aperçu de la note"):
+            st.write(selected_content)
+        
+        # Bouton pour générer des questions
+        if st.button("🔄 Générer des questions", key="generate_questions_btn"):
+            with st.spinner("Génération des questions en cours..."):
+                questions = generate_questions(selected_note, selected_content)
+                if questions:
+                    # Sauvegarder les questions dans la session
+                    save_session_questions(selected_note, questions)
+                    st.success(f"{len(questions)} questions générées avec succès !")
+                    st.session_state.show_quiz = True
+                    st.rerun()
                 else:
-                    st.error("L'API n'a retourné aucune question.")
-            except Exception as e:
-                st.error(f"Une erreur s'est produite : {e}")
-
-        # Afficher les questions
-        if st.session_state.questions:
-            st.write("### Questions :")
-            
-            # Afficher toutes les questions avec des champs de réponse
-            for i, question in enumerate(st.session_state.questions, 1):
-                st.write(f"**Question {i}:** {question['text']}")
-                # Stocker la réponse dans session_state
-                answer_key = f"answer_{i}"
-                user_answer = st.text_area(
-                    "Votre réponse",
-                    key=answer_key,
-                    height=100
-                )
-                st.session_state.user_answers[answer_key] = user_answer
-                st.markdown("---")
-
-            # Bouton unique pour vérifier toutes les réponses
-            if st.button("📝 Vérifier toutes les réponses"):
-                total_score = 0
-                with st.spinner("Évaluation des réponses en cours..."):
-                    for i, question in enumerate(st.session_state.questions, 1):
-                        answer_key = f"answer_{i}"
-                        user_answer = st.session_state.user_answers.get(answer_key, "")
-                        
-                        # Évaluer la réponse
-                        evaluation = evaluate_answer(
-                            question['text'],
-                            user_answer,
-                            question['reponse']
-                        )
-                        
-                        # Sauvegarder le résultat
-                        save_quiz_result(
-                            selected_note,
-                            question['text'],
-                            user_answer,
-                            question['reponse'],
-                            evaluation['score']
-                        )
-                        
-                        total_score += evaluation['score']
-                        
-                        # Afficher le résultat pour cette question
-                        with st.expander(f"Résultat Question {i}"):
-                            st.write(f"**Votre réponse:** {user_answer}")
-                            st.write(f"**Réponse correcte:** {question['reponse']}")
-                            st.write(f"**Score:** {evaluation['score']}/5")
-                
-                # Afficher le score total
-                avg_score = total_score / len(st.session_state.questions)
-                st.success(f"Score total : {avg_score:.1f}/5")
-                
-                # Option pour recommencer
-                if st.button("🔄 Recommencer le quiz"):
-                    st.session_state.user_answers = {}
-                    st.rerun()
-
-            # Bouton pour supprimer les questions
-            if st.button("🗑️ Supprimer toutes les questions"):
-                try:
-                    os.remove(json_file_path)
-                    st.session_state.questions = []
-                    st.session_state.user_answers = {}
-                    st.success("Les questions ont été supprimées avec succès !")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erreur lors de la suppression : {e}")
+                    st.error("Erreur lors de la génération des questions. Veuillez réessayer.")
         
-        else:
-            st.info("Aucune question disponible. Cliquez sur 'Générer des questions' pour commencer.")
+        # Afficher le quiz si des questions ont été générées
+        if st.session_state.get("show_quiz", False):
+            questions = get_session_questions(selected_note)
+            
+            if not questions:
+                st.warning("Aucune question disponible. Veuillez générer des questions.")
+            else:
+                st.subheader("Quiz")
+                
+                # Initialiser l'index de question si nécessaire
+                if "question_index" not in st.session_state:
+                    st.session_state.question_index = 0
+                    st.session_state.quiz_completed = False
+                    st.session_state.quiz_results = []
+                
+                # Afficher la question actuelle
+                if not st.session_state.quiz_completed and st.session_state.question_index < len(questions):
+                    current_q = questions[st.session_state.question_index]
+                    
+                    st.markdown(f"**Question {st.session_state.question_index + 1}/{len(questions)}**")
+                    st.markdown(f"### {current_q['text']}")
+                    
+                    # Zone de réponse
+                    user_answer = st.text_area("Votre réponse:", key=f"answer_{st.session_state.question_index}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Soumettre", key="submit_answer_btn"):
+                            if user_answer.strip():
+                                # Évaluer la réponse
+                                score, feedback = evaluate_answer(user_answer, current_q['reponse'])
+                                
+                                # Sauvegarder le résultat
+                                save_session_quiz_result(
+                                    selected_note, 
+                                    current_q['text'], 
+                                    user_answer, 
+                                    current_q['reponse'], 
+                                    score
+                                )
+                                
+                                # Stocker le résultat pour l'affichage final
+                                st.session_state.quiz_results.append({
+                                    "question": current_q['text'],
+                                    "user_answer": user_answer,
+                                    "correct_answer": current_q['reponse'],
+                                    "score": score,
+                                    "feedback": feedback
+                                })
+                                
+                                # Passer à la question suivante
+                                st.session_state.question_index += 1
+                                
+                                # Vérifier si le quiz est terminé
+                                if st.session_state.question_index >= len(questions):
+                                    st.session_state.quiz_completed = True
+                                
+                                st.rerun()
+                            else:
+                                st.error("Veuillez entrer une réponse avant de soumettre.")
+                    
+                    with col2:
+                        if st.button("⏭️ Passer", key="skip_question_btn"):
+                            st.session_state.question_index += 1
+                            if st.session_state.question_index >= len(questions):
+                                st.session_state.quiz_completed = True
+                            st.rerun()
+                
+                # Afficher les résultats à la fin du quiz
+                if st.session_state.quiz_completed:
+                    st.subheader("Résultats du quiz")
+                    
+                    # Calculer le score total
+                    total_score = sum(result["score"] for result in st.session_state.quiz_results)
+                    max_score = len(st.session_state.quiz_results) * 5  # 5 points par question
+                    percentage = (total_score / max_score) * 100 if max_score > 0 else 0
+                    
+                    st.markdown(f"**Score total: {total_score}/{max_score} ({percentage:.1f}%)**")
+                    
+                    # Afficher les résultats détaillés
+                    for i, result in enumerate(st.session_state.quiz_results):
+                        with st.expander(f"Question {i+1} - Score: {result['score']}/5"):
+                            st.markdown(f"**Q: {result['question']}**")
+                            st.markdown(f"**Votre réponse:** {result['user_answer']}")
+                            st.markdown(f"**Réponse correcte:** {result['correct_answer']}")
+                            st.markdown(f"**Feedback:** {result['feedback']}")
+                    
+                    # Bouton pour recommencer
+                    if st.button("🔄 Recommencer le quiz", key="restart_quiz_btn"):
+                        st.session_state.question_index = 0
+                        st.session_state.quiz_completed = False
+                        st.session_state.quiz_results = []
+                        st.rerun()
+                    
+                    # Bouton pour revenir à la sélection de note
+                    if st.button("📝 Choisir une autre note", key="choose_other_note_btn"):
+                        st.session_state.show_quiz = False
+                        st.session_state.question_index = 0
+                        st.session_state.quiz_completed = False
+                        st.session_state.quiz_results = []
+                        st.rerun()
 
 
 elif menu == "Performances":
-    st.header("📊 Performances d'apprentissage")
+    st.title("📊 Performances")
+    st.markdown("---")
     
-    stats = get_all_stats()
-    if not stats:
-        st.info("Aucune statistique disponible pour le moment. Commencez à répondre à des quiz pour voir vos performances !")
+    # Récupérer toutes les statistiques
+    all_stats = get_all_session_stats()
+    
+    if not all_stats:
+        st.info("Aucune statistique disponible. Complétez d'abord quelques quiz !")
     else:
-        # Vue d'ensemble globale
-        st.subheader("Vue d'ensemble")
+        # Sélection de la note pour afficher les statistiques
+        note_titles = list(all_stats.keys())
+        selected_note = st.selectbox(
+            "Sélectionnez une note pour voir les statistiques",
+            options=note_titles,
+            key="stats_note_select"
+        )
         
-        # Calculer les statistiques globales
-        all_scores = []
-        notes_avg_scores = {}
-        for note_title, note_stats in stats.items():
-            if note_stats["attempts"]:
-                scores = [attempt["score"] for attempt in note_stats["attempts"]]
-                notes_avg_scores[note_title] = sum(scores) / len(scores)
-                all_scores.extend(scores)
-        
-        # Afficher le score moyen global
-        if all_scores:
-            global_avg = sum(all_scores) / len(all_scores)
-            st.metric("Score moyen global", f"{global_avg:.1f}/5")
+        if selected_note:
+            note_stats = all_stats[selected_note]
+            attempts = note_stats.get("attempts", [])
             
-            # Graphique des scores moyens par note
-            st.bar_chart(notes_avg_scores)
+            if not attempts:
+                st.warning(f"Aucune tentative pour la note '{selected_note}'.")
+            else:
+                # Afficher les statistiques générales
+                st.subheader(f"Statistiques pour '{selected_note}'")
+                
+                # Calculer les statistiques
+                total_attempts = len(attempts)
+                total_score = sum(attempt["score"] for attempt in attempts)
+                max_possible = total_attempts * 5  # 5 points par question
+                avg_score = total_score / total_attempts if total_attempts > 0 else 0
+                
+                # Afficher les métriques
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Nombre de questions", total_attempts)
+                with col2:
+                    st.metric("Score moyen", f"{avg_score:.1f}/5")
+                with col3:
+                    st.metric("Score total", f"{total_score}/{max_possible}")
+                
+                # Afficher l'historique des tentatives
+                st.subheader("Historique des tentatives")
+                
+                # Trier les tentatives par date (plus récentes en premier)
+                sorted_attempts = sorted(attempts, key=lambda x: x["timestamp"], reverse=True)
+                
+                for i, attempt in enumerate(sorted_attempts):
+                    with st.expander(f"Tentative {i+1} - {attempt['timestamp'][:10]} - Score: {attempt['score']}/5"):
+                        st.markdown(f"**Question:** {attempt['question']}")
+                        st.markdown(f"**Votre réponse:** {attempt['user_answer']}")
+                        st.markdown(f"**Réponse correcte:** {attempt['correct_answer']}")
+                
+                # Option pour supprimer les statistiques
+                if st.button("🗑️ Supprimer les statistiques pour cette note", key="delete_note_stats_btn"):
+                    delete_session_note_stats(selected_note)
+                    st.success(f"Statistiques supprimées pour '{selected_note}'")
+                    st.rerun()
         
-        # Détails par note
-        st.subheader("Détails par note")
-        for note_title, note_stats in stats.items():
-            with st.expander(f"📝 {note_title}"):
-                if note_stats["attempts"]:
-                    col1, col2, col3 = st.columns(3)
-                    
-                    # Statistiques de base
-                    scores = [attempt["score"] for attempt in note_stats["attempts"]]
-                    avg_score = sum(scores) / len(scores)
-                    with col1:
-                        st.metric("Score moyen", f"{avg_score:.1f}/5")
-                    with col2:
-                        st.metric("Meilleur score", f"{max(scores)}/5")
-                    with col3:
-                        st.metric("Nombre de questions", len(scores))
-                    
-                    # Graphique d'évolution des scores
-                    scores_df = {
-                        "Question": range(1, len(scores) + 1),
-                        "Score": scores
-                    }
-                    st.line_chart(scores_df, x="Question", y="Score")
-                    
-                    # Historique détaillé
-                    st.write("### Historique détaillé")
-                    for attempt in reversed(note_stats["attempts"]):
-                        st.markdown(f"""
-                        **📅 {attempt['timestamp'][:16].replace('T', ' à ')}**
-                        - **Question:** {attempt['question']}
-                        - **Votre réponse:** {attempt['user_answer']}
-                        - **Réponse correcte:** {attempt['correct_answer']}
-                        - **Score:** {attempt['score']}/5
-                        ---
-                        """)
-                    
-                    # Bouton pour supprimer l'historique de cette note
-                    if st.button("🗑️ Supprimer l'historique", key=f"delete_{note_title}"):
-                        if delete_note_stats(note_title):
-                            st.success(f"Historique supprimé pour {note_title}")
-                            st.rerun()
-                        else:
-                            st.error("Erreur lors de la suppression de l'historique")
-
-        # Bouton pour supprimer tout l'historique
-        st.markdown("---")
-        if st.button("🗑️ Supprimer tout l'historique", type="secondary"):
-            if delete_all_stats():
-                st.success("Tout l'historique a été supprimé")
-                st.rerun()
-            else:
-                st.error("Erreur lors de la suppression de l'historique")
+        # Option pour supprimer toutes les statistiques
+        if st.button("🗑️ Supprimer toutes les statistiques", key="delete_all_stats_btn"):
+            delete_all_session_stats()
+            st.success("Toutes les statistiques ont été supprimées")
+            st.rerun()
 
 
-elif menu == "API":
-    st.header("Configuration de l'API")
-
-    # Charger la clé API existante (si elle existe)
-    if "api_key" not in st.session_state:
-        from dotenv import load_dotenv
-        load_dotenv()
-        st.session_state.api_key = os.getenv("DEEPSEEK_KEY", "")
-
-    # Formulaire pour entrer ou mettre à jour la clé API
-    st.write("Entrez votre clé API de OpenRouter pour activer les fonctionnalités de génération.")
-    api_key_input = st.text_input(
-        "Clé API",
-        value=st.session_state.api_key,
-        placeholder="Entrez votre clé API",
-        type="password",
-        key="api_input"
-    )
-
-    # Boutons pour enregistrer ou réinitialiser
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("Enregistrer la clé API"):
-            if len(api_key_input) == 73:
-                with open(".env", "w") as file:
-                    file.write(f'DEEPSEEK_KEY="{api_key_input}"')
-                st.session_state.api_key = api_key_input
-                st.success("Clé API enregistrée avec succès !")
-            else:
-                st.error("Clé API invalide. Elle doit comporter exactement 73 caractères.")
-
-    with col2:
-        if st.button("Réinitialiser la clé API"):
-            if os.path.exists(".env"):
-                os.remove(".env")
-            st.session_state.api_key = ""
-            st.warning("Clé API réinitialisée. Veuillez en entrer une nouvelle.")
-
-
-elif menu == "Docs":
-    st.header("📖 Docs")
-
-    # Bouton vers le dépôt GitHub
-    st.subheader("Accéder au Répo GitHub")
-    st.write("Vous pouvez accéder au code source et aux détails du projet sur le répo GitHub.")
-    st.link_button("👉 Aller au dépôt GitHub", url="https://github.com/mamour-dx/NoteMaster")
-
-    # Documentation sur la gestion de l'API DeepSeek via OpenRouter
-    st.subheader("Configurer l'API DeepSeek V3 via OpenRouter")
-    st.markdown(
-        """
-        Pour utiliser l'API DeepSeek dans cette application, vous devez générer une clé API OpenRouter et la configurer. Deux options sont disponibles :
-
-        ### 1️⃣ Obtenir une clé API OpenRouter
-        - Rendez-vous sur [OpenRouter](https://openrouter.ai) et créez un compte.
-        - Générez une clé API gratuite pour le modèle DeepSeek V3.
-
-        ### 2️⃣ Ajouter votre clé API à l'application
-
-        **Option 1 : via un fichier `.env` (manuel)**
-        - Créez un fichier `.env` à la racine du projet.
-        - Ajoutez-y la ligne suivante en remplaçant `VOTRE_CLE_API` par votre clé API :
-          ```
-          DEEPSEEK_KEY=VOTRE_CLE_API
-          ```
-        - Redémarrez l'application pour que les modifications soient prises en compte :
-          ```bash
-          streamlit run app.py
-          ```
-
-        **Option 2 : directement via l'application (automatique)**
-        - Accédez à l'onglet **API** dans le menu latéral de l'application.
-        - Entrez votre clé API dans le champ prévu et cliquez sur **Enregistrer**.
-        - L'application enregistrera automatiquement la clé pour une utilisation immédiate.
-
-        ### 💡 Résolution des problèmes
-        Si vous rencontrez des problèmes avec l'API :
-        - Vérifiez que votre clé API est correcte et valide.
-        - Assurez-vous que vous avez bien installé les dépendances nécessaires (`pip install openai`).
-        - Consultez la documentation d'OpenRouter ici : [Documentation OpenRouter](https://openrouter.ai/docs).
-
-        ### 🚀 Besoin d'aide ou d'une nouvelle fonctionnalité ?
-        Si vous avez un problème ou souhaitez suggérer une amélioration, ouvrez un **issue** sur GitHub :
-        👉 [Ouvrir un issue](https://github.com/mamour-dx/NoteMaster/issues)
-        Trop compliqué ? Envoyez-moi un email : [me@mxr.codes](mailto:me@mxr.codes)
-        """
-    )
+elif menu == "Import/Export":
+    st.title("📤 Import/Export des données")
+    st.markdown("---")
     
-    # Ajout d'un espace pour d'autres paramètres futurs
-    st.subheader("Autres paramètres")
-    st.write("Des options supplémentaires seront ajoutées ici à l'avenir.")
-
-
+    st.info("Cette fonctionnalité vous permet de sauvegarder vos données localement et de les restaurer ultérieurement.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Exporter vos données")
+        st.write("Téléchargez toutes vos notes, questions et statistiques dans un fichier JSON.")
+        
+        # Générer le contenu JSON pour le téléchargement
+        json_data = save_to_local_storage()
+        
+        st.download_button(
+            label="📥 Télécharger mes données",
+            data=json_data,
+            file_name="notemaster_data.json",
+            mime="application/json",
+            key="download_data_btn"
+        )
+    
+    with col2:
+        st.subheader("Importer vos données")
+        st.write("Restaurez vos données à partir d'un fichier JSON précédemment exporté.")
+        
+        uploaded_file = st.file_uploader("Choisissez un fichier JSON", type=["json"], key="upload_data_file")
+        
+        if uploaded_file is not None:
+            if st.button("📤 Importer les données", key="import_data_btn"):
+                # Lire le contenu du fichier
+                json_data = uploaded_file.read().decode("utf-8")
+                
+                # Charger les données dans la session
+                if load_from_local_storage(json_data):
+                    st.success("Données importées avec succès !")
+                    st.rerun()
+                else:
+                    st.error("Erreur lors de l'importation des données. Vérifiez le format du fichier.")
 
 
 # Divider
