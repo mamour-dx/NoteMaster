@@ -66,6 +66,10 @@ elif menu == "Prise de Notes":
     # Afficher les notes existantes
     notes = load_session_notes()
     
+    # Initialize form reset flag if not exists
+    if "reset_note_form" not in st.session_state:
+        st.session_state.reset_note_form = False
+    
     col1, col2 = st.columns([1, 2])
     
     with col1:
@@ -131,16 +135,26 @@ elif menu == "Prise de Notes":
         
         # Mode création
         else:
-            note_title = st.text_input("Titre de la note", key="new_title_input")
-            note_content = st.text_area("Contenu de la note", height=300, key="new_content_input")
+            # Check if we need to reset the form
+            if st.session_state.reset_note_form:
+                note_title = st.text_input("Titre de la note", value="", key=f"new_title_input_{st.session_state.get('form_counter', 0)}")
+                note_content = st.text_area("Contenu de la note", value="", height=300, key=f"new_content_input_{st.session_state.get('form_counter', 0)}")
+                st.session_state.reset_note_form = False
+            else:
+                note_title = st.text_input("Titre de la note", key=f"new_title_input_{st.session_state.get('form_counter', 0)}")
+                note_content = st.text_area("Contenu de la note", height=300, key=f"new_content_input_{st.session_state.get('form_counter', 0)}")
             
             if st.button("➕ Créer la note", key="create_note_btn"):
                 if note_title and note_content:
                     save_session_note(note_title, note_content)
                     st.success(f"Note créée : '{note_title}'")
-                    # Réinitialiser les champs
-                    st.session_state.new_title_input = ""
-                    st.session_state.new_content_input = ""
+                    
+                    # Increment form counter to generate new keys on next render
+                    if "form_counter" not in st.session_state:
+                        st.session_state.form_counter = 0
+                    st.session_state.form_counter += 1
+                    st.session_state.reset_note_form = True
+                    
                     st.rerun()
                 else:
                     st.error("Veuillez remplir le titre et le contenu de la note.")
