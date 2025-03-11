@@ -64,6 +64,14 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+**Autre alternative avec Docker**
+
+**Executez ces commandes**
+```bash
+docker build . -t notemaster
+docker run --env-file .env -dp 5000:5000 notemaster
+```
+
 ---
 
 ## 📁 Structure du Projet
